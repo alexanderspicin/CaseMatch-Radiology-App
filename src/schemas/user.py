@@ -1,16 +1,21 @@
 import uuid
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
-class User(BaseModel):
+class UserSchema(BaseModel):
     id: uuid.UUID
-    email: str
+    email: EmailStr
 
 
-class UserInDB(User):
+class UserInDB(UserSchema):
     hashed_password: str
 
 
-class UserCreate(BaseModel):
-    email: str
+class UserCreateSchema(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class UserLoginSchema(BaseModel):
+    email: EmailStr
     password: str
