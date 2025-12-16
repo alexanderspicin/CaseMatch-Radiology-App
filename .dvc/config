@@ -1,0 +1,7 @@
+# .dvc/config
+[core]
+    remote = casematch-radiology
+
+['remote "casematch-radiology"']
+    url = s3://casematch-radiology
+    endpointurl = https://storage.yandexcloud.net
