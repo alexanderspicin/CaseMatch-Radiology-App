@@ -1,12 +1,13 @@
 from fastapi import FastAPI
 from sqlalchemy import text
 
-from src.api import users
+from src.api import users, predict
 from src.db.database import engine
 
 app = FastAPI(title="CaseMatch Radiology API")
 
 app.include_router(users.router)
+app.include_router(predict.router)
 @app.get("/")
 def root():
     return {"message": "CaseMatch API is running"}
