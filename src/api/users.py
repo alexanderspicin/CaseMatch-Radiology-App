@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 
 from src.db.database import get_db
 from src.models.user import User
-from src.schemas.user import UserCreateSchema, UserLoginSchema
-from src.services.auth import create_access_token, JWTBearer
+from src.schemas.user_schemas import UserCreateSchema, UserLoginSchema
+from src.services.auth_service import create_access_token, JWTBearer
 from src.services.user_service import get_password_hash, verify_password
 
 router = APIRouter(prefix="/user", tags=["user"])
