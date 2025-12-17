@@ -8,6 +8,13 @@ services:
       - .env
     volumes:
       - ./alembic:/app/alembic
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
     depends_on:
       db:
         condition: service_healthy
