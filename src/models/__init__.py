@@ -1,2 +1,3 @@
 from src.models.user import User
-__all__ = ["User"]
+from src.models.balance import Balance, Transaction, ExchangeService
+__all__ = ["User", "Balance", "Transaction", "ExchangeService"]

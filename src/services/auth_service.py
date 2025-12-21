@@ -1,12 +1,17 @@
 import logging
 import time
 from datetime import datetime, timezone, timedelta
+from typing import Any
 
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.orm.session import Session
 
 from src.core.config import settings
-from jose import jwt
+from jose import jwt, JWTError
+
+from src.db.database import get_db
+from src.models import User
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
@@ -34,7 +39,6 @@ def decode_jwt(token: str) -> dict:
         return {}
 
 
-
 class JWTBearer(HTTPBearer):
     def __init__(self, auto_error: bool = True):
         super(JWTBearer, self).__init__(auto_error=auto_error)
@@ -60,3 +64,21 @@ class JWTBearer(HTTPBearer):
             isTokenValid = True
 
         return isTokenValid
+
+
+def get_current_user(
+        token: str = Depends(JWTBearer()),
+        db: Session = Depends(get_db)
+) -> type[User]:
+    try:
+        payload = decode_jwt(token)
+        email: str = payload.get("email")
+        if email is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    user = db.query(User).filter(User.email == email).first()
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user

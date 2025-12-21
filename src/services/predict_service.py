@@ -1,10 +1,13 @@
+import io
 import os
 import subprocess
-import joblib
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict
 from datetime import datetime
+
+from PIL import Image
 from tensorflow.keras.models import load_model as load_keras_model
+import numpy as np
 
 if os.getenv('DOCKER_ENV'):
     BASE_DIR = Path('/app')
@@ -16,10 +19,16 @@ MODELS_DIR = BASE_DIR / 'models'
 MODEL_PATH = MODELS_DIR / 'advanced_v3_all_in_one_smooth.h5'
 
 
-
 class ModelManager:
 
     def __init__(self, model_path: Path = MODEL_PATH):
+        self.labels = [
+            'Atelectasis', 'Cardiomegaly', 'Effusion',
+            'Infiltration', 'Mass', 'Nodule', 'Pneumonia', 'Pneumothorax',
+            'Consolidation', 'Edema', 'Emphysema', 'Fibrosis',
+            'Pleural_Thickening', 'Hernia', 'No Finding'
+        ]
+        self.IMG_SIZE = (480, 480)
         self.model = None
         self.model_path = model_path
         self.model_version = None
@@ -46,7 +55,6 @@ class ModelManager:
                 return False
 
         except Exception as e:
-            print(e)
             return False
 
     def load_model(self) -> bool:
@@ -72,7 +80,6 @@ class ModelManager:
             return True
 
         except Exception as e:
-            print(f"Error loading model: {e}")
             return False
 
     def get_dvc_remote(self) -> Optional[str]:
@@ -88,6 +95,35 @@ class ModelManager:
             pass
         return None
 
+    def preprocess_image(self, image: Image.Image) -> np.ndarray:
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        image = image.resize(self.IMG_SIZE, Image.Resampling.LANCZOS)
+        img_array = np.array(image, dtype='float32') / 255.0
+        img_array = np.expand_dims(img_array, axis=0)
+        return img_array
+
+    def predict_from_bytes(self, image_bytes: bytes, threshold: float = 0.5) -> Dict:
+        """Предсказание из байтов изображения"""
+        img = Image.open(io.BytesIO(image_bytes))
+        return self.predict(img, threshold)
+
+    def predict(self, image: Image.Image, threshold: float = 0.5) -> Dict:
+        if self.model is None:
+            raise ValueError('Model not loaded')
+        img_array = self.preprocess_image(image)
+        predictions = self.model.predict(img_array, verbose=0)[0]
+        result = []
+        for label, probability in zip(self.labels, predictions):
+            result.append({'label': label, 'probability': float(probability),
+                           'detected': True if probability >= threshold else False})
+        result.sort(key=lambda x: x['probability'], reverse=True)
+        detected = [r['label'] for r in result if r['detected']]
+        return {
+            'detected': detected,
+            'predictions': result,
+            'threshold': threshold,
+        }
+
 
 model_manager = ModelManager()
-
