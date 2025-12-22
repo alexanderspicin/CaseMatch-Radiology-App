@@ -101,7 +101,7 @@ class ModelManager:
                     vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
                 )
         except Exception as e:
-            print(f"Error ensuring Qdrant collection: {e}")
+            pass
 
     def load_model(self) -> bool:
         try:
@@ -131,7 +131,6 @@ class ModelManager:
             return True
 
         except Exception as e:
-            print(f"Error loading model: {e}")
             return False
 
     def get_dvc_remote(self) -> Optional[str]:
@@ -208,7 +207,6 @@ class ModelManager:
 
             return point_id
         except Exception as e:
-            print(f"Error saving to Qdrant: {e}")
             return None
 
     def predict_from_bytes(
@@ -281,7 +279,6 @@ class ModelManager:
                 prediction_result['point_id'] = point_id
                 prediction_result['saved_to_db'] = True
             except Exception as e:
-                print(f"Failed to save to Qdrant: {e}")
                 prediction_result['saved_to_db'] = False
                 prediction_result['error'] = str(e)
 

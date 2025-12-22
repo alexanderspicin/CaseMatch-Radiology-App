@@ -7,7 +7,7 @@ COPY requirements.streamlit.txt .
 RUN pip install --no-cache-dir -r requirements.streamlit.txt
 
 # Копируем приложение
-COPY streamlit_app.py .
+COPY src/streamlit_app/streamlit_app.py .
 
 # Создаем директорию для конфигурации streamlit
 RUN mkdir -p ~/.streamlit
