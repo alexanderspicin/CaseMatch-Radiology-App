@@ -50,7 +50,6 @@
 - Docker >= 20.10
 - Docker Compose >= 2.0
 - NVIDIA Docker (опционально, для GPU)
-- Make (опционально, для удобства)
 
 ### Быстрый старт
 
@@ -67,11 +66,6 @@ cp .env.example .env
 ```
 
 3. **Инициализация проекта (первый запуск)**
-```bash
-make init
-```
-
-Или вручную:
 ```bash
 docker-compose build
 docker-compose up -d db qdrant redis
@@ -172,9 +166,6 @@ response = requests.post(
 # Масштабирование API
 docker-compose up -d --scale api=5
 
-# С помощью Make
-make scale API_SCALE=5
-
 # Проверка
 docker-compose ps
 ```
@@ -200,53 +191,6 @@ api:
 - CORS защита
 - CSRF защита в Streamlit
 - Изолированные Docker сети
-
-## 🧪 Тестирование
-
-```bash
-# Запуск тестов
-make test
-
-# С coverage
-make test-coverage
-
-# Линтинг
-make lint
-
-# Форматирование
-make format
-
-# Проверка типов
-make type-check
-```
-
-## 🔄 CI/CD
-
-### GitHub Actions (пример)
-
-```yaml
-name: CI/CD
-
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Build
-        run: make build
-      - name: Test
-        run: make test
-
-  deploy:
-    needs: test
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy to production
-        run: make prod-up
-```
 
 ## 📚 Структура проекта
 
@@ -275,7 +219,6 @@ CaseMatch-Radiology-App/
 ├── nginx.conf                # Nginx конфигурация
 ├── Dockerfile                # API Dockerfile
 ├── Dockerfile.streamlit      # Streamlit Dockerfile
-├── Makefile                  # Команды для управления
 ├── requirements.txt          # Python зависимости
 └── README.md                 # Этот файл
 ```
@@ -299,16 +242,6 @@ deploy:
 # Сброс миграций
 docker-compose exec api alembic downgrade base
 docker-compose exec api alembic upgrade head
-```
-
-### Очистка данных
-
-```bash
-# Полная очистка
-make clean
-
-# Только контейнеры
-make down
 ```
 
 ### Проблемы с Qdrant
