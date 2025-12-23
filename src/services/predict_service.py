@@ -1,4 +1,5 @@
 import io
+import logging
 import os
 import subprocess
 import base64
@@ -62,24 +63,62 @@ class ModelManager:
             return False
 
     def _create_embedding_model(self):
-        """Создает модель для извлечения эмбеддингов с предпоследнего слоя"""
+        """Создает модель для извлечения эмбеддингов"""
         if self.model is None:
+            print("WARNING: Cannot create embedding model - main model is None", flush=True)
             return None
 
-        # Получаем предпоследний слой (перед финальным Dense слоем)
-        for layer in reversed(self.model.layers):
-            if len(layer.output_shape) > 1:  # Находим последний слой с многомерным выходом
-                embedding_layer = layer
-                break
-        else:
-            # Если не нашли, берем предпоследний слой
-            embedding_layer = self.model.layers[-2]
+        try:
+            embedding_layer = None
 
-        # Создаем модель для извлечения эмбеддингов
-        self.embedding_model = Model(
-            inputs=self.model.input,
-            outputs=embedding_layer.output
-        )
+            # Ищем подходящий слой по имени и размерности
+            for layer in self.model.layers:
+                layer_name = layer.name.lower()
+                layer_type = type(layer).__name__
+
+                # Пропускаем вложенные Functional модели (как efficientnetv2-s)
+                if layer_type == 'Functional':
+                    print(f"DEBUG: Skipping Functional layer: {layer.name}", flush=True)
+                    continue
+
+                # Пропускаем Input слои
+                if 'input' in layer_name:
+                    continue
+
+                try:
+                    output_shape = layer.output.shape
+                    print(f"DEBUG: Layer {layer.name}, type: {layer_type}, shape: {output_shape}", flush=True)
+
+                    # Ищем Dropout или Dense с большой размерностью (1280 или 256)
+                    if len(output_shape) == 2 and output_shape[-1]:
+                        dim = output_shape[-1]
+                        # Берём первый слой с размерностью >= 256 (но не финальный с 15)
+                        if dim >= 256 and dim != 15:
+                            embedding_layer = layer
+                            print(f"DEBUG: Selected layer: {layer.name}, dim: {dim}", flush=True)
+                            break
+                except Exception as e:
+                    print(f"DEBUG: Could not get shape for {layer.name}: {e}", flush=True)
+                    continue
+
+            if embedding_layer is None:
+                print("ERROR: Could not find suitable embedding layer", flush=True)
+                return None
+
+            print(f"DEBUG: Using layer for embeddings: {embedding_layer.name}", flush=True)
+
+            self.embedding_model = Model(
+                inputs=self.model.input,
+                outputs=embedding_layer.output
+            )
+
+            print(f"DEBUG: Embedding model created, output shape: {self.embedding_model.output.shape}", flush=True)
+
+        except Exception as e:
+            print(f"ERROR: Failed to create embedding model: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
+            self.embedding_model = None
 
     def _ensure_qdrant_collection(self):
         """Создает коллекцию в Qdrant если её нет"""
@@ -200,13 +239,18 @@ class ModelManager:
                 payload=payload
             )
 
+            # Работает в обеих версиях
             self.qdrant_client.upsert(
                 collection_name=self.collection_name,
                 points=[point]
             )
 
+            print(f"DEBUG: Saved to Qdrant with id: {point_id}", flush=True)
             return point_id
         except Exception as e:
+            print(f"ERROR: Failed to save to Qdrant: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
             return None
 
     def predict_from_bytes(
@@ -279,6 +323,8 @@ class ModelManager:
                 prediction_result['point_id'] = point_id
                 prediction_result['saved_to_db'] = True
             except Exception as e:
+                print('Failed to save to Qdrant', flush=True)
+                print(e, flush=True)
                 prediction_result['saved_to_db'] = False
                 prediction_result['error'] = str(e)
 
@@ -291,26 +337,32 @@ class ModelManager:
             score_threshold: float = 0.7
     ) -> list:
         """Ищет похожие изображения в Qdrant"""
+
+        # Ленивая инициализация embedding model
+        if self.embedding_model is None and self.model is not None:
+            print("DEBUG: Lazy initialization of embedding model", flush=True)
+            self._create_embedding_model()
+
         if self.embedding_model is None:
             raise ValueError("Embedding model not initialized")
 
         img_array = self.preprocess_image(image)
         embeddings = self._extract_embeddings(img_array)
 
-        search_results = self.qdrant_client.search(
+        search_results = self.qdrant_client.query_points(
             collection_name=self.collection_name,
-            query_vector=embeddings.tolist(),
+            query=embeddings.tolist(),
             limit=limit,
             score_threshold=score_threshold
         )
 
         return [
             {
-                "id": result.id,
-                "score": result.score,
-                "payload": result.payload
+                "id": point.id,
+                "score": point.score,
+                "payload": point.payload
             }
-            for result in search_results
+            for point in search_results.points
         ]
 
 

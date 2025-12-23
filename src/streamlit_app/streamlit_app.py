@@ -47,7 +47,7 @@ if 'user_data' not in st.session_state:
     st.session_state.user_data = None
 
 
-def make_request(endpoint, method="GET", data=None, files=None, auth_required=True):
+def make_request(endpoint, method="GET", data=None, files=None, params=None, auth_required=True):
     """Выполняет запрос к API"""
     url = f"{API_URL}{endpoint}"
     headers = {}
@@ -57,13 +57,14 @@ def make_request(endpoint, method="GET", data=None, files=None, auth_required=Tr
 
     try:
         if method == "GET":
-            response = requests.get(url, headers=headers)
+            response = requests.get(url, headers=headers, params=params)
         elif method == "POST":
             if files:
-                response = requests.post(url, headers=headers, files=files, data=data)
+                # Для multipart/form-data не устанавливаем Content-Type
+                response = requests.post(url, headers=headers, files=files, params=params)
             else:
                 headers["Content-Type"] = "application/json"
-                response = requests.post(url, headers=headers, json=data)
+                response = requests.post(url, headers=headers, json=data, params=params)
 
         return response
     except Exception as e:
@@ -156,8 +157,9 @@ def sidebar_info():
             amount = st.number_input("Сумма (₽)", min_value=1.0, value=100.0, step=10.0)
             if st.button("Пополнить", use_container_width=True):
                 response = make_request(
-                    f"/balance/credit?amount={amount}",
-                    method="GET"
+                    "/balance/credit",
+                    method="GET",
+                    params={"amount": amount}
                 )
                 if response and response.status_code == 200:
                     st.success(f"Баланс пополнен на {amount} ₽")
@@ -204,16 +206,16 @@ def prediction_page():
                     img_byte_arr.seek(0)
 
                     files = {"image": ("image.png", img_byte_arr, "image/png")}
-                    data = {
+                    params = {
                         "threshold": threshold,
-                        "save_to_db": str(save_to_db).lower()
+                        "save_to_db": save_to_db
                     }
 
                     response = make_request(
                         "/predict/predict",
                         method="POST",
                         files=files,
-                        data=data
+                        params=params
                     )
 
                     if response and response.status_code == 200:
@@ -228,10 +230,14 @@ def prediction_page():
         if 'prediction_result' in st.session_state and st.session_state.prediction_result:
             result = st.session_state.prediction_result
 
+            # Фильтруем реальные патологии (исключаем "No Finding")
+            detected = result.get('detected', [])
+            diseases = [label for label in detected if label != 'No Finding']
+
             # Обнаруженные патологии
-            if result.get('detected'):
+            if diseases:
                 st.markdown("### 🚨 Обнаружены патологии:")
-                for label in result['detected']:
+                for label in diseases:
                     st.markdown(f"<div class='detected'>• {label}</div>", unsafe_allow_html=True)
             else:
                 st.success("✅ Патологий не обнаружено")
@@ -246,6 +252,7 @@ def prediction_page():
                 label = pred['label']
                 prob = pred['probability']
                 detected = pred['detected']
+                is_disease = label != 'No Finding'
 
                 col_a, col_b, col_c = st.columns([3, 1, 1])
                 with col_a:
@@ -253,16 +260,25 @@ def prediction_page():
                 with col_b:
                     st.write(f"{prob * 100:.1f}%")
                 with col_c:
+                    # No Finding - зеленый если detected, болезни - красный если detected
                     if detected:
-                        st.write("🔴")
+                        if is_disease:
+                            st.write("🔴")  # Болезнь обнаружена - плохо
+                        else:
+                            st.write("🟢")  # No Finding - хорошо
                     else:
-                        st.write("🟢")
+                        if is_disease:
+                            st.write("🟢")  # Болезнь не обнаружена - хорошо
+                        else:
+                            st.write("⚪")  # No Finding не обнаружен - нейтрально
 
                 st.progress(prob)
 
             # Информация о сохранении
             if result.get('saved_to_db'):
-                st.success(f"✅ Снимок сохранен в базу данных (ID: {result.get('point_id', 'N/A')[:8]}...)")
+                point_id = result.get('point_id', 'N/A')
+                display_id = point_id[:8] if point_id and point_id != 'N/A' else 'N/A'
+                st.success(f"✅ Снимок сохранен в базу данных (ID: {display_id}...)")
         else:
             st.info("Загрузите изображение и нажмите 'Анализировать' для получения результатов")
 
@@ -294,7 +310,7 @@ def search_similar_page():
             img_byte_arr.seek(0)
 
             files = {"image": ("image.png", img_byte_arr, "image/png")}
-            data = {
+            params = {
                 "limit": limit,
                 "score_threshold": score_threshold
             }
@@ -303,7 +319,7 @@ def search_similar_page():
                 "/predict/search-similar",
                 method="POST",
                 files=files,
-                data=data
+                params=params
             )
 
             if response and response.status_code == 200:
@@ -319,22 +335,28 @@ def search_similar_page():
                             col_a, col_b = st.columns([1, 2])
 
                             with col_a:
-                                st.write(f"**ID:** {result['id'][:8]}...")
-                                st.write(f"**Дата:** {payload.get('timestamp', 'N/A')[:10]}")
+                                result_id = str(result['id'])[:8] if result.get('id') else 'N/A'
+                                st.write(f"**ID:** {result_id}...")
+                                timestamp = payload.get('timestamp', 'N/A')
+                                display_date = timestamp[:10] if timestamp and timestamp != 'N/A' else 'N/A'
+                                st.write(f"**Дата:** {display_date}")
                                 st.write(f"**Пользователь:** {payload.get('user_email', 'N/A')}")
 
                             with col_b:
                                 st.write("**Обнаружено:**")
                                 detected = payload.get('detected_labels', [])
-                                if detected:
-                                    for label in detected:
+                                # Фильтруем реальные патологии
+                                diseases = [label for label in detected if label != 'No Finding']
+                                if diseases:
+                                    for label in diseases:
                                         st.markdown(f"• {label}")
                                 else:
                                     st.write("Патологий не обнаружено")
                 else:
                     st.warning("Похожих случаев не найдено")
             else:
-                st.error("Ошибка поиска")
+                error_msg = response.text if response else 'Нет ответа'
+                st.error(f"Ошибка поиска: {error_msg}")
 
 
 def main_app():

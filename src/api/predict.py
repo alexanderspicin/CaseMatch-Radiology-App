@@ -1,11 +1,15 @@
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends
+from sqlalchemy.orm import Session
 
+from src.db.database import get_db
+from src.schemas.balance import CreateTransactionSchema
 from src.schemas.predict_schema import HealthResponse, PredictResponseSchema
 from src.services.predict_service import model_manager
 from src.services.auth_service import get_current_user
 from src.models.user import User
+from src.services.transaction_service import create_transaction, process_transaction
 
 model_manager.load_model()
 
@@ -27,7 +31,8 @@ async def predict(
         image: UploadFile = File(...),
         threshold: float = 0.5,
         save_to_db: bool = False,
-        current_user: User = Depends(get_current_user)
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
 ):
     if image.content_type not in ["image/jpeg", "image/png"]:
         raise HTTPException(
@@ -46,6 +51,14 @@ async def predict(
                 "filename": image.filename
             }
         )
+        transaction_schema = CreateTransactionSchema(
+            user_id=current_user.id,
+            transaction_type='DEBIT',
+            amount=10
+        )
+        db_transaction = create_transaction(transaction_schema, db=db)
+        process_transaction(db_transaction.id, db=db)
+        print(predictions)
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -82,6 +95,7 @@ async def search_similar(
         )
         return {"results": results, "count": len(results)}
     except Exception as e:
+        print(e)
         raise HTTPException(
             status_code=500,
             detail=f"Search failed with error: {e}"
