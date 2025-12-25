@@ -191,7 +191,7 @@ def prediction_page():
 
         if uploaded_file:
             image = Image.open(uploaded_file)
-            st.image(image, caption="Загруженное изображение", use_container_width=True)
+            st.image(image, caption="Загруженное изображение", width=500)
 
             st.subheader("Параметры анализа")
             threshold = st.slider("Порог детекции", 0.0, 1.0, 0.5, 0.05)
