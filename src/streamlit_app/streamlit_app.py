@@ -194,7 +194,7 @@ def prediction_page():
             st.image(image, caption="Загруженное изображение", width=500)
 
             st.subheader("Параметры анализа")
-            threshold = st.slider("Порог детекции", 0.0, 1.0, 0.5, 0.05)
+            threshold = st.slider("Порог детекции", 0.0, 1.0, 0.35, 0.05)
             save_to_db = st.checkbox("Сохранить в базу данных", value=False,
                                      help="Сохранить снимок для поиска похожих случаев")
 
@@ -332,9 +332,23 @@ def search_similar_page():
                         with st.expander(f"Случай #{idx} - Схожесть: {result['score'] * 100:.1f}%"):
                             payload = result['payload']
 
-                            col_a, col_b = st.columns([1, 2])
+                            # ✅ ДОБАВЛЕНО: Отображение изображения
+                            col_img, col_info = st.columns([1, 2])
 
-                            with col_a:
+                            with col_img:
+                                # Декодируем base64 изображение
+                                if 'image_base64' in payload:
+                                    try:
+                                        import base64
+                                        img_data = base64.b64decode(payload['image_base64'])
+                                        img = Image.open(io.BytesIO(img_data))
+                                        st.image(img, caption=f"Случай {idx}", use_container_width=True)
+                                    except Exception as e:
+                                        st.warning(f"Не удалось загрузить изображение: {e}")
+                                else:
+                                    st.info("Изображение недоступно")
+
+                            with col_info:
                                 result_id = str(result['id'])[:8] if result.get('id') else 'N/A'
                                 st.write(f"**ID:** {result_id}...")
                                 timestamp = payload.get('timestamp', 'N/A')
@@ -342,7 +356,6 @@ def search_similar_page():
                                 st.write(f"**Дата:** {display_date}")
                                 st.write(f"**Пользователь:** {payload.get('user_email', 'N/A')}")
 
-                            with col_b:
                                 st.write("**Обнаружено:**")
                                 detected = payload.get('detected_labels', [])
                                 # Фильтруем реальные патологии

@@ -186,11 +186,15 @@ class ModelManager:
         return None
 
     def preprocess_image(self, image: Image.Image) -> np.ndarray:
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
+        if image.mode != 'L':
+            image = image.convert('L')
+
         image = image.resize(self.IMG_SIZE, Image.Resampling.LANCZOS)
-        img_array = np.array(image, dtype='float32') / 255.0
+
+        img_array = np.array(image, dtype='float32')
+        img_array = np.stack([img_array, img_array, img_array], axis=-1)
         img_array = np.expand_dims(img_array, axis=0)
+
         return img_array
 
     def _extract_embeddings(self, img_array: np.ndarray) -> np.ndarray:
